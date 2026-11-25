@@ -12,6 +12,8 @@ Disk Growth Tracker is a portable Windows app that shows which folders are getti
 
 ## Use the app
 
+[Download Disk Growth Tracker 1.4 for Windows](https://github.com/ZielCL/Disk-Growth-Tracker/raw/refs/heads/main/downloads/Disk%20Growth%20Tracker%201.4.exe).
+
 Open the executable, choose a drive or folder, and select **Scan now**. The first scan is your baseline. Scan the same location again to see how much its folders changed. Use **Growth only** to focus on folders that got bigger.
 
 The scanner uses file sizes. It skips reparse points such as junctions and marks values affected by unreadable entries with `≈`. History and the language preference are stored in `%LOCALAPPDATA%\CrecimientoDisco`.
