@@ -30,16 +30,60 @@ namespace DiskGrowth
                 CheckLargestFiles(folder, scope);
                 CheckPathExplanations();
                 CheckUpdater(folder);
+                CheckFileComparisonData(folder);
                 if (args.Length > 1)
                     CheckVersionOne(args[1]);
                 RunWindowChecks(scope, history, folder);
-                Console.WriteLine("OK: history, navigation, bilingual UI, explanations and update verification.");
+                Console.WriteLine("OK: folder and file histories, bilingual UI, explanations and update verification.");
                 return 0;
             }
             catch (Exception error)
             {
                 Console.Error.WriteLine(error);
                 return 1;
+            }
+        }
+
+        private static void CheckFileComparisonData(string fixture)
+        {
+            string scope = Path.Combine(fixture, "File sample");
+            Directory.CreateDirectory(Path.Combine(scope, "Sub"));
+            Write(scope, "Sub\\grew.bin", 20);
+            Write(scope, "removed.bin", 18);
+            Write(scope, "smaller.bin", 60);
+            Write(scope, "unchanged.bin", 71);
+            var history = new FileHistory(Path.Combine(fixture, "file-history-tests"));
+            var before = new Scanner(CancellationToken.None, null).ScanFiles(scope);
+            history.Save(scope, before, CancellationToken.None);
+            Write(scope, "Sub\\grew.bin", 65);
+            File.Delete(Path.Combine(scope, "removed.bin"));
+            Write(scope, "smaller.bin", 10);
+            Write(scope, "added.bin", 0);
+            var after = new Scanner(CancellationToken.None, null).ScanFiles(scope);
+            history.Save(scope, after, CancellationToken.None);
+            var saved = history.List(scope);
+            Require(saved.Count == 2, "file history has two scans");
+            var changes = FileChange.Between(history.Read(saved[1]), history.Read(saved[0])).ToDictionary(item => item.Path);
+            Require(changes.Count == 4 && changes["Sub\\grew.bin"].Kind == FileChangeKind.Grew && changes["Sub\\grew.bin"].Delta == 45 &&
+                changes["smaller.bin"].Kind == FileChangeKind.Shrank && changes["smaller.bin"].Delta == -50 &&
+                changes["removed.bin"].Kind == FileChangeKind.Removed && changes["added.bin"].Kind == FileChangeKind.Added,
+                "file history distinguishes four changes, including an empty new file");
+            before.Omitted = 1;
+            after.Omitted = 1;
+            var partial = FileChange.Between(before, after).ToDictionary(item => item.Path);
+            Require(partial["removed.bin"].Kind == FileChangeKind.Uncertain && !partial["removed.bin"].Delta.HasValue &&
+                partial["added.bin"].Kind == FileChangeKind.Uncertain && partial["Sub\\grew.bin"].Delta == 45,
+                "partial scans never claim inaccessible files were removed or added");
+            using (var stop = new CancellationTokenSource())
+            {
+                stop.Cancel();
+                try
+                {
+                    history.Save(scope, after, stop.Token);
+                    throw new Exception("A canceled measurement was saved.");
+                }
+                catch (OperationCanceledException) { }
+                Require(history.List(scope).Count == 2, "cancel leaves the previous snapshots available");
             }
         }
 
@@ -262,9 +306,10 @@ namespace DiskGrowth
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             var preferences = new LanguagePreferences(Path.Combine(folder, "settings"));
+            var fileHistory = new FileHistory(Path.Combine(folder, "ui-file-history"));
             Require(preferences.Save("es"), "set initial test language");
             Exception failure = null;
-            using (var form = new DiskWindow(history, preferences))
+            using (var form = new DiskWindow(history, preferences, fileHistory))
             {
                 form.Shown += async (sender, args) =>
                 {
@@ -310,6 +355,7 @@ namespace DiskGrowth
                         CheckExplanationDialog(form, Get<Button>(form, "explainFolder"), false);
                         SaveKnownExplanation(form, folder);
                         CheckFileWindow(form, scope, folder, false);
+                        CheckFileComparisonModal(form, Path.Combine(scope, "Vídeos"), fileHistory);
                         var languagePicker = Get<ComboBox>(form, "languagePicker");
                         var changeLanguage = typeof(DiskWindow).GetMethod("ChangeLanguage", BindingFlags.Instance | BindingFlags.NonPublic);
                         string spanishDate = picker.GetItemText(picker.SelectedItem);
@@ -318,7 +364,8 @@ namespace DiskGrowth
                         Require(form.Text == "What's filling up my drive?" && scan.Text == "Scan now" &&
                             listing.Columns[0].Text == "Folder" && Get<Button>(form, "copy").Text == "Copy path" &&
                             Get<Button>(form, "explainFolder").Text == "What is this?" &&
-                            Get<Button>(form, "updateButton").Text == "Check for updates",
+                            Get<Button>(form, "updateButton").Text == "Check for updates" &&
+                            Get<Button>(form, "compareFiles").Text == "Compare files",
                             "English reached main controls and columns");
                         Require(picker.SelectedIndex == 1 && picker.GetItemText(picker.Items[0]) == "No comparison" &&
                             picker.GetItemText(picker.SelectedItem) != spanishDate, "comparison selection and localized date");
@@ -474,6 +521,56 @@ namespace DiskGrowth
             if (failure != null)
                 throw failure;
             Require(checkedDialog, "explanation opened from the UI");
+        }
+
+        private static void CheckFileComparisonModal(DiskWindow parent, string folder, FileHistory history)
+        {
+            Exception failure = null;
+            bool checkedDialog = false;
+            string sampleName = "comparison-only.tmp";
+            string sample = Path.Combine(folder, sampleName);
+            using (var timer = new System.Windows.Forms.Timer { Interval = 50 })
+            {
+                timer.Tick += async (sender, args) =>
+                {
+                    var dialog = Application.OpenForms.Cast<Form>().FirstOrDefault(form => form.GetType().Name == "FileComparisonWindow");
+                    if (dialog == null)
+                        return;
+                    timer.Stop();
+                    try
+                    {
+                        var save = Get<Button>(dialog, "measure");
+                        var grid = Get<ListView>(dialog, "files");
+                        await WaitUntil(() => save.Enabled);
+                        Require(dialog.Text == "Comparar archivos" && grid.Items.Count == 0, "file comparison opens with an empty history");
+                        save.PerformClick();
+                        await WaitUntil(() => save.Enabled && save.Text == "Guardar medición" && history.List(folder).Count == 1);
+                        File.WriteAllBytes(sample, new byte[8192]);
+                        save.PerformClick();
+                        await WaitUntil(() => save.Enabled && grid.Items.Count == 1);
+                        Require(grid.Items[0].Text == sampleName && grid.Items[0].SubItems[1].Text == "Nuevo" &&
+                            grid.Items[0].SubItems[2].Text == "+8 KiB", "second scan exposes the new file and exact growth");
+                        var search = Get<TextBox>(dialog, "search");
+                        search.Text = "missing";
+                        await WaitUntil(() => grid.Items.Count == 0);
+                        search.Text = "comparison";
+                        await WaitUntil(() => grid.Items.Count == 1);
+                        checkedDialog = true;
+                    }
+                    catch (Exception error) { failure = error; }
+                    finally
+                    {
+                        if (File.Exists(sample))
+                            File.Delete(sample);
+                        dialog.Close();
+                    }
+                };
+                timer.Start();
+                Get<Button>(parent, "compareFiles").PerformClick();
+            }
+            if (failure != null)
+                throw failure;
+            Require(checkedDialog, "main window opens file comparison");
         }
 
         private static void SaveKnownExplanation(Form owner, string output)

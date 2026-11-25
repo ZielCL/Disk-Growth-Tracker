@@ -13,7 +13,7 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Crecimiento del disco")]
 [assembly: AssemblyProduct("Crecimiento del disco")]
-[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.8.0.0")]
 
 namespace DiskGrowth
 {
@@ -52,6 +52,7 @@ namespace DiskGrowth
         private const int DisplayLimit = 3000;
 
         private readonly History history;
+        private readonly FileHistory fileHistory;
         private readonly LanguagePreferences preferences;
         private readonly UiLanguage language = new UiLanguage();
         private readonly List<Action> translations = new List<Action>();
@@ -74,6 +75,7 @@ namespace DiskGrowth
         private readonly Button measureFolder = new Button();
         private readonly Button largestFiles = new Button();
         private readonly Button explainFolder = new Button();
+        private readonly Button compareFiles = new Button();
         private readonly Button clearFilters = new Button();
         private readonly Label breadcrumb = new Label();
         private readonly Label currentValue = new Label();
@@ -110,9 +112,10 @@ namespace DiskGrowth
         private string footerKey = "";
         private object[] footerArguments = new object[0];
 
-        public DiskWindow(History history, LanguagePreferences preferences)
+        public DiskWindow(History history, LanguagePreferences preferences, FileHistory fileHistory = null)
         {
             this.history = history;
+            this.fileHistory = fileHistory ?? new FileHistory(Path.Combine(Program.DataDirectory, "HistorialArchivos"));
             this.preferences = preferences;
             language.Select(preferences.Load());
             BindText(this, "¿Qué me está llenando el disco?");
@@ -274,11 +277,12 @@ namespace DiskGrowth
 
             var navigation = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, Margin = Padding.Empty
+                Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1, Margin = Padding.Empty
             };
             navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 79F));
             navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76F));
             navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 151F));
             navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108F));
             navigation.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 204F));
             StyleLocalButton(up, "↑ Subir", false);
@@ -293,10 +297,14 @@ namespace DiskGrowth
             breadcrumb.TextAlign = ContentAlignment.MiddleLeft;
             breadcrumb.Margin = new Padding(4, 0, 12, 7);
             navigation.Controls.Add(breadcrumb, 2, 0);
+            StyleLocalButton(compareFiles, "Comparar archivos", false);
+            compareFiles.Margin = new Padding(0, 0, 14, 6);
+            BindTip(compareFiles, "Compara los archivos de la carpeta seleccionada entre dos mediciones.");
+            navigation.Controls.Add(compareFiles, 3, 0);
             var compareLabel = LocalLabel("Comparar con");
             compareLabel.TextAlign = ContentAlignment.MiddleLeft;
             compareLabel.Margin = new Padding(0, 0, 0, 7);
-            navigation.Controls.Add(compareLabel, 3, 0);
+            navigation.Controls.Add(compareLabel, 4, 0);
             baselinePicker.DropDownStyle = ComboBoxStyle.DropDownList;
             BindAccessible(baselinePicker, "Medición anterior");
             baselinePicker.FormattingEnabled = true;
@@ -307,7 +315,7 @@ namespace DiskGrowth
             };
             baselinePicker.Dock = DockStyle.Top;
             baselinePicker.Margin = new Padding(0, 1, 0, 0);
-            navigation.Controls.Add(baselinePicker, 4, 0);
+            navigation.Controls.Add(baselinePicker, 5, 0);
             layout.Controls.Add(navigation, 0, 3);
 
             var filters = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, Margin = Padding.Empty };
@@ -680,6 +688,14 @@ namespace DiskGrowth
                 if (folder != null)
                     ShowExplanation(this, folder, false, language);
             };
+            compareFiles.Click += (sender, args) =>
+            {
+                string folder = SelectedPath(SelectedRow());
+                if (folder == null)
+                    return;
+                using (var window = new FileComparisonWindow(folder, language, fileHistory))
+                    window.ShowDialog(this);
+            };
             largestFiles.Click += (sender, args) =>
             {
                 string folder = SelectedPath(SelectedRow());
@@ -997,6 +1013,7 @@ namespace DiskGrowth
             string folder = SelectedPath(row);
             copy.Enabled = folder != null;
             explainFolder.Enabled = folder != null;
+            compareFiles.Enabled = folder != null && !loading && activeScan == null && updateCancellation == null;
             reveal.Enabled = folder != null && (row != null && !row.DirectFiles
                 ? row.ExistsNow
                 : relative.Length == 0 || latest != null && latest.Get(relative) != null);

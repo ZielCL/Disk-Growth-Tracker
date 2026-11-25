@@ -120,7 +120,7 @@ namespace DiskGrowth
                 throw new ArgumentOutOfRangeException("limit");
             cancellation.ThrowIfCancellationRequested();
             var largest = new LargestCollector(limit);
-            Visit(new DirectoryInfo(root), "", largest);
+            Visit(new DirectoryInfo(root), "", (entry, relative, bytes) => largest.Add(entry, bytes));
             cancellation.ThrowIfCancellationRequested();
             return new LargestFiles
             {
@@ -131,7 +131,19 @@ namespace DiskGrowth
             };
         }
 
-        private FolderSize Visit(DirectoryInfo directory, string relative, LargestCollector largest)
+        public FileSnapshot ScanFiles(string root)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var files = new FileSnapshot();
+            Visit(new DirectoryInfo(root), "", (entry, relative, bytes) =>
+                files.Add(Path.Combine(relative, entry.Name), bytes));
+            cancellation.ThrowIfCancellationRequested();
+            files.Date = DateTime.UtcNow;
+            files.Omitted = (long)snapshot.Errors + snapshot.Links;
+            return files;
+        }
+
+        private FolderSize Visit(DirectoryInfo directory, string relative, Action<FileSystemInfo, string, long> onFile)
         {
             var result = new FolderSize { Path = relative };
             folderCount++;
@@ -156,7 +168,7 @@ namespace DiskGrowth
                         }
                         if ((attributes & FileAttributes.Directory) != 0)
                         {
-                            var child = Visit(new DirectoryInfo(entry.FullName), Path.Combine(relative, entry.Name), largest);
+                            var child = Visit(new DirectoryInfo(entry.FullName), Path.Combine(relative, entry.Name), onFile);
                             result.Total += child.Total;
                             result.Partial |= child.Partial;
                         }
@@ -164,8 +176,8 @@ namespace DiskGrowth
                         {
                             long bytes = ((FileInfo)entry).Length;
                             result.Direct += bytes;
-                            if (largest != null)
-                                largest.Add(entry, bytes);
+                            if (onFile != null)
+                                onFile(entry, relative, bytes);
                             result.Files++;
                             fileCount++;
                         }
@@ -186,7 +198,7 @@ namespace DiskGrowth
             }
 
             result.Total += result.Direct;
-            if (largest == null)
+            if (onFile == null)
                 snapshot.Add(result);
             return result;
         }
@@ -286,7 +298,7 @@ namespace DiskGrowth
             }
         }
 
-        public List<HistoryEntry> List(string root)
+        public List<HistoryEntry> List(string root, int limit = Limit)
         {
             string directory = FindDirectory(root);
             if (!Directory.Exists(directory))
@@ -304,7 +316,7 @@ namespace DiskGrowth
                     entries.Add(new HistoryEntry { FilePath = file, Date = date });
                 }
             }
-            return entries.OrderByDescending(entry => entry.Date).Take(Limit).ToList();
+            return entries.OrderByDescending(entry => entry.Date).Take(limit).ToList();
         }
 
         public List<string> RecentLocations()
@@ -345,36 +357,21 @@ namespace DiskGrowth
         public void Save(string root, Snapshot snapshot)
         {
             string directory = FindDirectory(root);
-            Directory.CreateDirectory(directory);
-            string name = snapshot.Date.ToString(DateFormat, CultureInfo.InvariantCulture) +
-                "-" + Guid.NewGuid().ToString("N");
-            string temp = Path.Combine(directory, name + ".tmp");
-            try
+            WriteSnapshot(root, snapshot.Date, Limit, writer =>
             {
-                using (var file = File.Open(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                using (var gzip = new GZipStream(file, CompressionMode.Compress))
-                using (var writer = new BinaryWriter(gzip))
+                writer.Write(Version);
+                writer.Write(snapshot.Errors);
+                writer.Write(snapshot.Links);
+                writer.Write(snapshot.Folders.Count);
+                foreach (var folder in snapshot.Folders.Values)
                 {
-                    writer.Write(Version);
-                    writer.Write(snapshot.Errors);
-                    writer.Write(snapshot.Links);
-                    writer.Write(snapshot.Folders.Count);
-                    foreach (var folder in snapshot.Folders.Values)
-                    {
-                        writer.Write(folder.Path);
-                        writer.Write(folder.Total);
-                        writer.Write(folder.Direct);
-                        writer.Write(folder.Files);
-                        writer.Write(folder.Partial);
-                    }
+                    writer.Write(folder.Path);
+                    writer.Write(folder.Total);
+                    writer.Write(folder.Direct);
+                    writer.Write(folder.Files);
+                    writer.Write(folder.Partial);
                 }
-                File.Move(temp, Path.Combine(directory, name + ".dgs"));
-            }
-            finally
-            {
-                if (File.Exists(temp))
-                    File.Delete(temp);
-            }
+            });
 
             try
             {
@@ -386,11 +383,33 @@ namespace DiskGrowth
                     throw;
                 // The measurement is already committed.
             }
+        }
+
+        internal void WriteSnapshot(string root, DateTime date, int limit, Action<BinaryWriter> write, CancellationToken cancellation = default(CancellationToken))
+        {
+            string directory = FindDirectory(root);
+            Directory.CreateDirectory(directory);
+            string name = date.ToString(DateFormat, CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N");
+            string temp = Path.Combine(directory, name + ".tmp");
+            try
+            {
+                using (var file = File.Open(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                using (var gzip = new GZipStream(file, CompressionMode.Compress))
+                using (var writer = new BinaryWriter(gzip))
+                    write(writer);
+                cancellation.ThrowIfCancellationRequested();
+                File.Move(temp, Path.Combine(directory, name + ".dgs"));
+            }
+            finally
+            {
+                if (File.Exists(temp))
+                    File.Delete(temp);
+            }
 
             try
             {
                 var files = Directory.GetFiles(directory, "*.dgs");
-                foreach (string old in files.OrderByDescending(file => file, StringComparer.Ordinal).Skip(Limit))
+                foreach (string old in files.OrderByDescending(file => file, StringComparer.Ordinal).Skip(limit))
                     File.Delete(old);
             }
             catch (Exception ex)

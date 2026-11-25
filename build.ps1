@@ -13,7 +13,8 @@ $source = Join-Path $PSScriptRoot 'src'
 $artifacts = Join-Path $PSScriptRoot 'artifacts'
 [void](New-Item -Path $artifacts -ItemType Directory -Force)
 $app = Join-Path $artifacts 'Disk Growth Tracker.exe'
-$sources = @('DiskApp.cs', 'DiskData.cs', 'DiskFilesWindow.cs', 'ExplanationWindow.cs', 'PathExplanation.cs',
+$sources = @('DiskApp.cs', 'DiskData.cs', 'DiskFilesWindow.cs', 'ExplanationWindow.cs', 'FileComparison.cs',
+    'FileComparisonWindow.cs', 'PathExplanation.cs',
     'PortableUpdate.cs', 'UiLanguage.cs', 'UpdateControls.cs') |
     ForEach-Object { Join-Path $source $_ }
 $common = @('/nologo', '/codepage:65001', '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Net.Http.dll')

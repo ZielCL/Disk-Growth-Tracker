@@ -208,7 +208,32 @@ namespace DiskGrowth
             { "Ya tienes la versión más reciente ({0}).", "You have the latest version ({0})." },
             { "Está disponible la versión {0}. ¿Descargarla y abrirla ahora?", "Version {0} is available. Download and open it now?" },
             { "Descargando y verificando la versión {0}…", "Downloading and verifying version {0}…" },
-            { "No se pudo completar la actualización. Si Windows bloqueó el archivo, revisa el aviso antes de volver a intentarlo.", "The update could not be completed. If Windows blocked the file, review the alert before trying again." }
+            { "No se pudo completar la actualización. Si Windows bloqueó el archivo, revisa el aviso antes de volver a intentarlo.", "The update could not be completed. If Windows blocked the file, review the alert before trying again." },
+            { "Comparar archivos", "Compare files" },
+            { "Compara los archivos de la carpeta seleccionada entre dos mediciones.", "Compare files in the selected folder between two scans." },
+            { "Guardar medición", "Save scan" },
+            { "Buscar archivo", "Find file" },
+            { "Estado", "Status" },
+            { "Ahora", "Now" },
+            { "Todos los cambios", "All changes" },
+            { "Nuevo", "Added" },
+            { "Ya no aparece", "Removed" },
+            { "Aumentó", "Grew" },
+            { "Se redujo", "Shrank" },
+            { "Sin confirmar", "Unconfirmed" },
+            { "Midiendo…", "Scanning…" },
+            { "Guarda la primera medición de esta carpeta.", "Save the first scan of this folder." },
+            { "Guarda otra medición para comparar los tamaños de archivo.", "Save another scan to compare file sizes." },
+            { "Última medición {0} · {1:N0} archivos", "Latest scan {0} · {1:N0} files" },
+            { "Medición parcial · {0:N0} entradas omitidas ahora · {1:N0} antes", "Partial scan · {0:N0} entries skipped now · {1:N0} before" },
+            { "Si una medición es parcial, un archivo ausente en esa medición queda sin confirmar.", "A file missing from a partial scan is shown as unconfirmed." },
+            { "Medición cancelada.", "Scan canceled." },
+            { "Esta carpeta supera el límite de una medición por archivo. Elige una subcarpeta.", "This folder exceeds the file scan limit. Choose a smaller subfolder." },
+            { "No se pudo leer o guardar la medición de archivos.", "Couldn't read or save the file scan." },
+            { "No hay cambios de tamaño para mostrar.", "No size changes to show." },
+            { "{0:N0} de {1:N0} cambios · Usa Buscar archivo para acotar", "{0:N0} of {1:N0} changes · Use Find file to narrow the list" },
+            { "{0:N0} cambio", "{0:N0} change" },
+            { "{0:N0} cambios", "{0:N0} changes" }
         };
 
         public CultureInfo Culture { get; private set; }
