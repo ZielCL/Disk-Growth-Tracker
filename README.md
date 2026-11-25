@@ -1,26 +1,49 @@
 # Disk Growth Tracker
 
-Disk Growth Tracker is a portable Windows app that shows which folders are getting bigger between scans. It keeps up to 12 scans per location on your PC.
+**Find what grew since the last time you checked your disk.**
 
-## What you can do
+Disk Growth Tracker is a portable Windows 11 app that compares folder sizes across scans. When free space drops, you can see which folders account for the change and inspect the largest files inside them.
 
-- Scan a drive or folder and compare it with an earlier scan.
-- Find growing folders anywhere within a scanned location.
-- Inspect up to 100 of the largest files in a folder and its subfolders.
-- Copy file and folder paths or find them in File Explorer.
-- Switch between English and Spanish while the app is running.
+**[Download v1.4 for Windows](https://github.com/ZielCL/Disk-Growth-Tracker/raw/refs/heads/main/downloads/Disk%20Growth%20Tracker%201.4.exe)** · [How it works](#how-it-works) · [Guía en español](#guía-en-español) · [Build from source](#build-from-source)
 
-## Use the app
+![Disk Growth Tracker comparing two scans of the same folder. Recordings is the largest increase at 18 GiB.](docs/images/compare-scans.png)
 
-[Download Disk Growth Tracker 1.4 for Windows](https://github.com/ZielCL/Disk-Growth-Tracker/raw/refs/heads/main/downloads/Disk%20Growth%20Tracker%201.4.exe).
+*Example with demo data. Media Library grew by **18.8 GiB** in a week, with **Recordings** accounting for the largest increase.*
 
-Open the executable, choose a drive or folder, and select **Scan now**. The first scan is your baseline. Scan the same location again to see how much its folders changed. Use **Growth only** to focus on folders that got bigger.
+## How it works
 
-The scanner uses file sizes. It skips reparse points such as junctions and marks values affected by unreadable entries with `≈`. History and the language preference are stored in `%LOCALAPPDATA%\CrecimientoDisco`.
+1. **Save a baseline.** Open the executable, choose a drive or folder, and select **Scan now**.
+2. **Scan the same location again.** The app compares the new scan with the previous one by default. Use **Compare with** to select an older scan.
+3. **Follow the largest changes.** Turn on **Growth only** to focus on increases, or **Include subfolders** to rank deeper folders in one list. Double-click a folder to explore it.
+4. **Inspect the files.** Select a folder and open **Large files**. The list shows up to 100 of the largest files currently in that folder and its subfolders. Select a file to copy its full path or show it in File Explorer.
 
-## Build on Windows
+![Largest files in Recordings, sorted by size, with each file's subfolder and actions to copy its path or show it in File Explorer.](docs/images/largest-files.png)
 
-The app uses C# and Windows Forms on .NET Framework. The build script uses the Windows .NET Framework C# compiler.
+### What the measurements mean
+
+| In the app | What it tells you |
+| --- | --- |
+| **Change** | The difference in measured folder size between the two selected scans. |
+| **Large files** | The current size and location of each file in the list. |
+| **Free space on drive** | The latest available-space reading for the drive. |
+| **≈** | At least one relevant entry was inaccessible or could not be measured. |
+
+The scanner sums logical file sizes and skips reparse points such as junctions. Scans read file metadata. The app stores up to 12 scans per location and saves the language preference locally in `%LOCALAPPDATA%\CrecimientoDisco`.
+
+## Guía en español
+
+Elige **Español** en el selector de idioma. Selecciona una unidad o carpeta y pulsa **Medir ahora**. Mide la misma ubicación más adelante y activa **Solo aumentos** para ver qué creció. Usa **Archivos grandes** para revisar los archivos que más pesan dentro de una carpeta.
+
+<details>
+<summary>Ver la interfaz en español</summary>
+
+![Interfaz en español con el filtro Solo aumentos aplicado a una comparación de carpetas.](docs/images/spanish-interface.png)
+
+</details>
+
+## Build from source
+
+The app uses C# and Windows Forms on .NET Framework. Run the build script on Windows from the repository root.
 
 ```powershell
 .\build.ps1
@@ -31,3 +54,5 @@ The executable will be at `artifacts\Disk Growth Tracker.exe`. Add `-RunChecks` 
 ```powershell
 .\build.ps1 -RunChecks
 ```
+
+To report a problem, include your Windows version, the app version, and steps to reproduce it. [Open an issue](https://github.com/ZielCL/Disk-Growth-Tracker/issues/new).
