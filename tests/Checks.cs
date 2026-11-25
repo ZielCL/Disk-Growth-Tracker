@@ -28,7 +28,7 @@ namespace DiskGrowth
                 RunDataChecks(scope, history);
                 CheckLargestFiles(folder, scope);
                 CheckPathExplanations();
-                CheckUpdater(folder).GetAwaiter().GetResult();
+                CheckUpdater().GetAwaiter().GetResult();
                 if (args.Length > 1)
                     CheckVersionOne(args[1]);
                 RunWindowChecks(scope, history, folder);
@@ -42,42 +42,27 @@ namespace DiskGrowth
             }
         }
 
-        private static async Task CheckUpdater(string fixture)
+        private static async Task CheckUpdater()
         {
-            string app = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Disk Growth Tracker.exe");
-            byte[] bytes = File.ReadAllBytes(app);
-            Version appVersion = AssemblyName.GetAssemblyName(app).Version;
-            string versionLabel = appVersion.ToString(3);
-            string manifest = "version=" + versionLabel + "\nsha256=" + PortableUpdate.HashFile(app) + "\nsize=" + bytes.Length;
-            string target = Path.Combine(fixture, "Tracker.exe");
-            File.Copy(app, target);
-            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest, bytes)))
+            const string manifest = "version=2.0.10\r\n";
+            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest)))
             {
                 var release = await updater.Check(CancellationToken.None);
-                Require(release.Version == appVersion && UpdateRelease.Parse("version=2.0.10\nsha256=" + release.Hash +
-                    "\nsize=" + bytes.Length).Version > new Version(2, 0, 9, 0),
-                    "stable version compares correctly");
-                Require(release.Download.AbsolutePath.EndsWith("/Disk%20Growth%20Tracker%20" + versionLabel + ".exe"),
-                    "release path is derived from version");
-                string stage = await updater.Prepare(release, target, CancellationToken.None);
-                Require(PortableUpdate.IsStageName(Path.GetFileName(stage)) && File.Exists(Path.Combine(stage, "apply.exe")),
-                    "verified update prepared alongside current executable");
-                Require(PortableUpdate.HashFile(Path.Combine(stage, "payload.exe")) == release.Hash, "downloaded hash verified");
-                PortableUpdate.Cleanup(stage);
-                Require(!Directory.Exists(stage) && File.Exists(target), "cleanup deletes only application-owned stage");
+                Require(release.Version == new Version(2, 0, 10, 0) && release.Version > new Version(2, 0, 9, 0),
+                    "versions compare numerically");
+                Require(release.DownloadPage.AbsoluteUri ==
+                    "https://github.com/ZielCL/Disk-Growth-Tracker/blob/main/downloads/Disk%20Growth%20Tracker%202.0.10.exe",
+                    "update points to the official GitHub page");
             }
 
-            bytes[bytes.Length - 1] ^= 1;
-            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest, bytes)))
+            using (var updater = new PortableUpdate(new TestUpdateFeed(new string('x', 129))))
             {
-                var release = await updater.Check(CancellationToken.None);
                 try
                 {
-                    await updater.Prepare(release, target, CancellationToken.None);
-                    throw new Exception("A corrupted download was accepted.");
+                    await updater.Check(CancellationToken.None);
+                    throw new Exception("An oversized release record was accepted.");
                 }
                 catch (InvalidDataException) { }
-                Require(!Directory.EnumerateDirectories(fixture, ".disk-growth-update-*").Any(), "failed staging is removed");
             }
             try
             {
@@ -90,23 +75,19 @@ namespace DiskGrowth
         private sealed class TestUpdateFeed : HttpMessageHandler
         {
             private readonly string manifest;
-            private readonly byte[] payload;
 
-            public TestUpdateFeed(string manifest, byte[] payload)
+            public TestUpdateFeed(string manifest)
             {
                 this.manifest = manifest;
-                this.payload = payload;
             }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
             {
-                Require(request.RequestUri.Scheme == "https" && request.RequestUri.Host == "raw.githubusercontent.com",
-                    "updates use the trusted repository host");
+                Require(request.RequestUri == UpdateRelease.Manifest && request.Method == HttpMethod.Get,
+                    "the updater requests only the release record");
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = request.RequestUri == UpdateRelease.Manifest
-                        ? (HttpContent)new StringContent(manifest)
-                        : new ByteArrayContent(payload)
+                    Content = new StringContent(manifest)
                 });
             }
         }

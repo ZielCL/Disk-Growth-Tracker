@@ -1,4 +1,8 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,7 +18,6 @@ namespace DiskGrowth
                 return;
             var cancellation = new CancellationTokenSource();
             updateCancellation = cancellation;
-            string stage = null;
             UpdateControls();
             try
             {
@@ -31,32 +34,24 @@ namespace DiskGrowth
                         return;
                     }
                     string nextVersion = release.Version.ToString(3);
-                    if (MessageBox.Show(this, T("Está disponible la versión {0}. ¿Descargarla y reiniciar la app para instalarla?", nextVersion),
+                    if (MessageBox.Show(this, T("Está disponible la versión {0}. ¿Abrir su página de descarga en GitHub?", nextVersion),
                         T("Actualización"), MessageBoxButtons.YesNo, MessageBoxIcon.Question,
                         MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                         return;
-
-                    SetStatus("Descargando y verificando la versión {0}…", nextVersion);
-                    string executable = Application.ExecutablePath;
-                    stage = await updater.Prepare(release, executable, cancellation.Token);
-                    cancellation.Token.ThrowIfCancellationRequested();
-                    PortableUpdate.LaunchHelper(stage, executable);
-                    stage = null;
-                    Close();
+                    using (Process.Start(new ProcessStartInfo(release.DownloadPage.AbsoluteUri) { UseShellExecute = true })) { }
                 }
             }
             catch (Exception ex)
             {
-                if (!PortableUpdate.IsUpdateError(ex))
+                if (!(ex is HttpRequestException || ex is OperationCanceledException || ex is IOException || ex is InvalidDataException ||
+                    ex is ArgumentException || ex is Win32Exception || ex is ObjectDisposedException))
                     throw;
                 if (!IsDisposed && !cancellation.IsCancellationRequested)
-                    MessageBox.Show(this, T("No se pudo descargar o verificar la actualización. Puedes volver a intentarlo desde el botón."),
+                    MessageBox.Show(this, T("No se pudo consultar la actualización o abrir GitHub. Vuelve a intentarlo."),
                         T("Actualización"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
             {
-                if (stage != null)
-                    PortableUpdate.Cleanup(stage);
                 updateCancellation = null;
                 cancellation.Dispose();
                 if (!IsDisposed)

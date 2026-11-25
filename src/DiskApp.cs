@@ -13,14 +13,14 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Crecimiento del disco")]
 [assembly: AssemblyProduct("Crecimiento del disco")]
-[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.6.1.0")]
 
 namespace DiskGrowth
 {
     internal static class Program
     {
         [STAThread]
-        private static void Main(string[] args)
+        private static void Main()
         {
             AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling", false);
             AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", false);
@@ -28,26 +28,8 @@ namespace DiskGrowth
             Application.SetCompatibleTextRenderingDefault(false);
             string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrecimientoDisco");
             var preferences = new LanguagePreferences(local);
-            if (args.Length > 0 && args[0] == "--apply-update")
-            {
-                var language = new UiLanguage();
-                language.Select(preferences.Load());
-                PortableUpdate.Apply(args, Application.ExecutablePath, language);
-                return;
-            }
             using (var window = new DiskWindow(new History(Path.Combine(local, "Historial")), preferences))
-            {
-                if (args.Length == 2 && args[0] == "--updated" && PortableUpdate.IsStageName(args[1]))
-                {
-                    string stage = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), args[1]);
-                    window.Shown += async (sender, eventArgs) =>
-                    {
-                        await Task.Delay(1600);
-                        PortableUpdate.Cleanup(stage);
-                    };
-                }
                 Application.Run(window);
-            }
         }
     }
 

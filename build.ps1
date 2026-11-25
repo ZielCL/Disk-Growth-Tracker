@@ -44,10 +44,8 @@ if ($PrepareUpdate) {
     [void](New-Item -Path $downloads,$updates -ItemType Directory -Force)
     $releaseApp = Join-Path $downloads "Disk Growth Tracker $version.exe"
     Copy-Item -LiteralPath $app -Destination $releaseApp -Force
-    $hash = (Get-FileHash -LiteralPath $releaseApp -Algorithm SHA256).Hash.ToLowerInvariant()
-    $size = (Get-Item -LiteralPath $releaseApp).Length
-    $manifest = Join-Path $updates 'stable.txt'
-    @("version=$version", "sha256=$hash", "size=$size") | Set-Content -LiteralPath $manifest -Encoding ascii
+    $manifest = Join-Path $updates 'latest.txt'
+    "version=$version" | Set-Content -LiteralPath $manifest -Encoding ascii
     Write-Output $releaseApp
     Write-Output $manifest
 }

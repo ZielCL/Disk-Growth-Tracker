@@ -206,10 +206,8 @@ namespace DiskGrowth
             { "Buscando actualizaciones…", "Checking for updates…" },
             { "Actualización", "Update" },
             { "Ya tienes la versión más reciente ({0}).", "You have the latest version ({0})." },
-            { "Está disponible la versión {0}. ¿Descargarla y reiniciar la app para instalarla?", "Version {0} is available. Download it and restart the app to install it?" },
-            { "Descargando y verificando la versión {0}…", "Downloading and verifying version {0}…" },
-            { "No se pudo descargar o verificar la actualización. Puedes volver a intentarlo desde el botón.", "The update could not be downloaded or verified. You can try again using the button." },
-            { "No se pudo aplicar la actualización. Revisa si hay otra instancia abierta o si la carpeta permite escritura.", "The update could not be applied. Check whether another instance is open or whether the folder is writable." }
+            { "Está disponible la versión {0}. ¿Abrir su página de descarga en GitHub?", "Version {0} is available. Open its download page on GitHub?" },
+            { "No se pudo consultar la actualización o abrir GitHub. Vuelve a intentarlo.", "Couldn't check for updates or open GitHub. Please try again." }
         };
 
         public CultureInfo Culture { get; private set; }
