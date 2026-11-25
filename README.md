@@ -1,5 +1,12 @@
 # Disk Growth Tracker
 
+[![Download the portable v1.4 executable](https://img.shields.io/badge/Download-v1.4-2563eb)](https://github.com/ZielCL/Disk-Growth-Tracker/raw/refs/heads/main/downloads/Disk%20Growth%20Tracker%201.4.exe)
+[![Windows 11](https://img.shields.io/badge/Windows-11-0078d4)](https://github.com/ZielCL/Disk-Growth-Tracker#how-it-works)
+[![Windows build status](https://github.com/ZielCL/Disk-Growth-Tracker/actions/workflows/windows-build.yml/badge.svg?branch=main)](https://github.com/ZielCL/Disk-Growth-Tracker/actions/workflows/windows-build.yml)
+[![Languages: English and Spanish](https://img.shields.io/badge/Languages-EN%20%2F%20ES-0f766e)](https://github.com/ZielCL/Disk-Growth-Tracker#guía-en-español)
+[![GitHub stars](https://img.shields.io/github/stars/ZielCL/Disk-Growth-Tracker?style=flat&logo=github)](https://github.com/ZielCL/Disk-Growth-Tracker/stargazers)
+[![Report an issue](https://img.shields.io/badge/Feedback-Report%20an%20issue-7c3aed)](https://github.com/ZielCL/Disk-Growth-Tracker/issues/new)
+
 **Find what grew since the last time you checked your disk.**
 
 Disk Growth Tracker is a portable Windows 11 app that compares folder sizes across scans. When free space drops, you can see which folders account for the change and inspect the largest files inside them.
