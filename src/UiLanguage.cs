@@ -206,8 +206,9 @@ namespace DiskGrowth
             { "Buscando actualizaciones…", "Checking for updates…" },
             { "Actualización", "Update" },
             { "Ya tienes la versión más reciente ({0}).", "You have the latest version ({0})." },
-            { "Está disponible la versión {0}. ¿Abrir su página de descarga en GitHub?", "Version {0} is available. Open its download page on GitHub?" },
-            { "No se pudo consultar la actualización o abrir GitHub. Vuelve a intentarlo.", "Couldn't check for updates or open GitHub. Please try again." }
+            { "Está disponible la versión {0}. ¿Descargarla y abrirla ahora?", "Version {0} is available. Download and open it now?" },
+            { "Descargando y verificando la versión {0}…", "Downloading and verifying version {0}…" },
+            { "No se pudo completar la actualización. Si Windows bloqueó el archivo, revisa el aviso antes de volver a intentarlo.", "The update could not be completed. If Windows blocked the file, review the alert before trying again." }
         };
 
         public CultureInfo Culture { get; private set; }

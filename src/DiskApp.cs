@@ -13,12 +13,15 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Crecimiento del disco")]
 [assembly: AssemblyProduct("Crecimiento del disco")]
-[assembly: AssemblyVersion("1.6.1.0")]
+[assembly: AssemblyVersion("1.7.0.0")]
 
 namespace DiskGrowth
 {
     internal static class Program
     {
+        internal static readonly string DataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrecimientoDisco");
+
         [STAThread]
         private static void Main()
         {
@@ -26,7 +29,7 @@ namespace DiskGrowth
             AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", false);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrecimientoDisco");
+            string local = DataDirectory;
             var preferences = new LanguagePreferences(local);
             using (var window = new DiskWindow(new History(Path.Combine(local, "Historial")), preferences))
                 Application.Run(window);

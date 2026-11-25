@@ -46,6 +46,11 @@ if ($PrepareUpdate) {
     Copy-Item -LiteralPath $app -Destination $releaseApp -Force
     $manifest = Join-Path $updates 'latest.txt'
     "version=$version" | Set-Content -LiteralPath $manifest -Encoding ascii
+    $directManifest = Join-Path $updates 'direct.txt'
+    $hash = (Get-FileHash -LiteralPath $releaseApp -Algorithm SHA256).Hash.ToLowerInvariant()
+    $size = (Get-Item -LiteralPath $releaseApp).Length
+    @("version=$version", "sha256=$hash", "size=$size") | Set-Content -LiteralPath $directManifest -Encoding ascii
     Write-Output $releaseApp
     Write-Output $manifest
+    Write-Output $directManifest
 }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -28,7 +29,7 @@ namespace DiskGrowth
                 RunDataChecks(scope, history);
                 CheckLargestFiles(folder, scope);
                 CheckPathExplanations();
-                CheckUpdater().GetAwaiter().GetResult();
+                CheckUpdater(folder);
                 if (args.Length > 1)
                     CheckVersionOne(args[1]);
                 RunWindowChecks(scope, history, folder);
@@ -42,24 +43,59 @@ namespace DiskGrowth
             }
         }
 
-        private static async Task CheckUpdater()
+        private static void CheckUpdater(string fixture)
         {
-            const string manifest = "version=2.0.10\r\n";
-            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest)))
+            string app = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Disk Growth Tracker.exe");
+            byte[] bytes = File.ReadAllBytes(app);
+            AssemblyName releaseName = AssemblyName.GetAssemblyName(app);
+            var old = new AssemblyName { Name = releaseName.Name, Version = new Version(0, 0, 0, 0) };
+            string hash;
+            using (var sha = SHA256.Create())
+                hash = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "");
+            string payloadInfo = "\nsha256=" + hash + "\nsize=" + bytes.Length;
+            string manifest = "version=" + releaseName.Version.ToString(3) + payloadInfo;
+            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest, bytes)))
             {
-                var release = await updater.Check(CancellationToken.None);
-                Require(release.Version == new Version(2, 0, 10, 0) && release.Version > new Version(2, 0, 9, 0),
+                var release = updater.Check(CancellationToken.None).GetAwaiter().GetResult();
+                var future = UpdateRelease.Parse("version=2.0.10" + payloadInfo);
+                Require(release.Version == releaseName.Version && future.Version > new Version(2, 0, 9, 0),
                     "versions compare numerically");
-                Require(release.DownloadPage.AbsoluteUri ==
-                    "https://github.com/ZielCL/Disk-Growth-Tracker/blob/main/downloads/Disk%20Growth%20Tracker%202.0.10.exe",
-                    "update points to the official GitHub page");
+                Require(future.Download.AbsoluteUri ==
+                    "https://raw.githubusercontent.com/ZielCL/Disk-Growth-Tracker/main/downloads/Disk%20Growth%20Tracker%202.0.10.exe",
+                    "update derives a URL in the trusted repository");
+                string copy = updater.Download(release, fixture, old, CancellationToken.None).GetAwaiter().GetResult();
+                try
+                {
+                    Require(File.Exists(copy) && !string.Equals(copy, app, StringComparison.OrdinalIgnoreCase),
+                        "update downloaded to a separate version folder");
+                    PortableUpdate.CheckWithWindows(release, copy, old.Name);
+                }
+                finally { PortableUpdate.Discard(copy); }
+
+                try
+                {
+                    updater.Download(release, fixture, releaseName, CancellationToken.None).GetAwaiter().GetResult();
+                    throw new Exception("The same version was accepted for installation.");
+                }
+                catch (InvalidDataException) { }
             }
 
-            using (var updater = new PortableUpdate(new TestUpdateFeed(new string('x', 129))))
+            bytes[bytes.Length - 1] ^= 1;
+            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest, bytes)))
             {
                 try
                 {
-                    await updater.Check(CancellationToken.None);
+                    var release = updater.Check(CancellationToken.None).GetAwaiter().GetResult();
+                    updater.Download(release, fixture, old, CancellationToken.None).GetAwaiter().GetResult();
+                    throw new Exception("A payload with the wrong hash was accepted.");
+                }
+                catch (InvalidDataException) { }
+            }
+            using (var updater = new PortableUpdate(new TestUpdateFeed(new string('x', 257), bytes)))
+            {
+                try
+                {
+                    updater.Check(CancellationToken.None).GetAwaiter().GetResult();
                     throw new Exception("An oversized release record was accepted.");
                 }
                 catch (InvalidDataException) { }
@@ -75,19 +111,22 @@ namespace DiskGrowth
         private sealed class TestUpdateFeed : HttpMessageHandler
         {
             private readonly string manifest;
+            private readonly byte[] bytes;
 
-            public TestUpdateFeed(string manifest)
+            public TestUpdateFeed(string manifest, byte[] bytes)
             {
                 this.manifest = manifest;
+                this.bytes = bytes;
             }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
             {
-                Require(request.RequestUri == UpdateRelease.Manifest && request.Method == HttpMethod.Get,
-                    "the updater requests only the release record");
+                Require(request.RequestUri.Scheme == "https" && request.RequestUri.Host == "raw.githubusercontent.com" &&
+                    request.Method == HttpMethod.Get, "the updater requests data only from the trusted host");
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = new StringContent(manifest)
+                    Content = request.RequestUri == UpdateRelease.Manifest
+                        ? (HttpContent)new StringContent(manifest) : new ByteArrayContent(bytes)
                 });
             }
         }
