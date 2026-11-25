@@ -187,7 +187,29 @@ namespace DiskGrowth
             { "Resultados parciales", "Partial results" },
             { "Puntos de reanálisis omitidos, incluidos enlaces: {0:N0}.", "Reparse points skipped, including links: {0:N0}." },
             { "Selecciona un archivo.", "Select a file." },
-            { "El archivo ya no está disponible en esa ruta.", "The file is no longer available at that path." }
+            { "El archivo ya no está disponible en esa ruta.", "The file is no longer available at that path." },
+            { "¿Qué es esto?", "What is this?" },
+            { "Explicar para qué sirve el elemento seleccionado.", "Explain what the selected item is used for." },
+            { "Ruta del elemento", "Item path" },
+            { "Explicación del elemento", "Item explanation" },
+            { "Abrir fuente oficial", "Open official source" },
+            { "Cerrar", "Close" },
+            { "Identificado por la ruta", "Identified by path" },
+            { "Contexto de la carpeta que lo contiene", "Context from the containing folder" },
+            { "Formato sugerido por la extensión {0}", "Format suggested by the {0} extension" },
+            { "Sin coincidencia conocida", "No known match" },
+            { "El nombre, la extensión y la ruta disponibles no permiten identificar para qué se usa este archivo.", "The available name, extension, and path give too little information to identify this file's purpose." },
+            { "Esta ruta no coincide con una ubicación del catálogo. Para averiguar su función, revisa qué aplicación o proyecto usa la carpeta.", "This path has no match in the catalog. Check which app or project uses this folder to learn its purpose." },
+            { "La extensión orienta sobre el formato. El programa que lo creó sigue sin identificar.", "The extension suggests a format. The app that created it is still unknown." },
+            { "No se pudo abrir la fuente oficial.", "Couldn't open the official source." },
+            { "Buscar actualizaciones", "Check for updates" },
+            { "Buscando actualizaciones…", "Checking for updates…" },
+            { "Actualización", "Update" },
+            { "Ya tienes la versión más reciente ({0}).", "You have the latest version ({0})." },
+            { "Está disponible la versión {0}. ¿Descargarla y reiniciar la app para instalarla?", "Version {0} is available. Download it and restart the app to install it?" },
+            { "Descargando y verificando la versión {0}…", "Downloading and verifying version {0}…" },
+            { "No se pudo descargar o verificar la actualización. Puedes volver a intentarlo desde el botón.", "The update could not be downloaded or verified. You can try again using the button." },
+            { "No se pudo aplicar la actualización. Revisa si hay otra instancia abierta o si la carpeta permite escritura.", "The update could not be applied. Check whether another instance is open or whether the folder is writable." }
         };
 
         public CultureInfo Culture { get; private set; }

@@ -25,6 +25,7 @@ namespace DiskGrowth
             private readonly Button refresh = new Button();
             private readonly Button copyFile = new Button();
             private readonly Button revealFile = new Button();
+            private readonly Button explainFile = new Button();
             private readonly ProgressBar progress = new ProgressBar();
             private readonly ToolTip tips = new ToolTip();
             private CancellationTokenSource active;
@@ -51,6 +52,12 @@ namespace DiskGrowth
                 refresh.Click += async (sender, args) => await FindFiles();
                 copyFile.Click += (sender, args) => CopyFilePath();
                 revealFile.Click += (sender, args) => RevealFilePath();
+                explainFile.Click += (sender, args) =>
+                {
+                    var entry = SelectedFile();
+                    if (entry != null)
+                        ShowExplanation(this, entry.Path, true, language);
+                };
                 files.SelectedIndexChanged += (sender, args) => UpdateActions();
                 files.DoubleClick += (sender, args) => RevealFilePath();
                 files.KeyDown += (sender, args) =>
@@ -162,22 +169,26 @@ namespace DiskGrowth
 
                 var actions = new TableLayoutPanel
                 {
-                    Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 7, 0, 0),
+                    Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0, 7, 0, 0),
                     Padding = new Padding(10, 0, 7, 0), BackColor = Tint
                 };
                 actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
                 actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 121F));
                 actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176F));
+                actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128F));
                 selectedPath.Dock = DockStyle.Fill;
                 selectedPath.Margin = new Padding(0, 0, 10, 0);
                 selectedPath.ForeColor = Muted;
                 actions.Controls.Add(selectedPath, 0, 0);
                 StyleButton(copyFile, T("Copiar ruta"), false);
                 StyleButton(revealFile, T("Mostrar en Explorador"), false);
-                copyFile.Margin = new Padding(0, 6, 7, 6);
-                revealFile.Margin = new Padding(0, 6, 0, 6);
+                StyleButton(explainFile, T("¿Qué es esto?"), false);
+                copyFile.Margin = revealFile.Margin = new Padding(0, 6, 7, 6);
+                explainFile.Margin = new Padding(0, 6, 0, 6);
+                tips.SetToolTip(explainFile, T("Explicar para qué sirve el elemento seleccionado."));
                 actions.Controls.Add(copyFile, 1, 0);
                 actions.Controls.Add(revealFile, 2, 0);
+                actions.Controls.Add(explainFile, 3, 0);
                 layout.Controls.Add(actions, 0, 4);
 
                 progress.Dock = DockStyle.Fill;
@@ -298,7 +309,7 @@ namespace DiskGrowth
             private void UpdateActions()
             {
                 var entry = SelectedFile();
-                copyFile.Enabled = revealFile.Enabled = entry != null;
+                copyFile.Enabled = revealFile.Enabled = explainFile.Enabled = entry != null;
                 copyFile.Text = T("Copiar ruta");
                 selectedPath.Text = entry == null ? T("Selecciona un archivo.") : entry.Path;
                 tips.SetToolTip(selectedPath, entry == null ? "" : entry.Path);

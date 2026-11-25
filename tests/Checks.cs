@@ -3,6 +3,8 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,10 +27,12 @@ namespace DiskGrowth
                 var history = new History(Path.Combine(folder, "historial"));
                 RunDataChecks(scope, history);
                 CheckLargestFiles(folder, scope);
+                CheckPathExplanations();
+                CheckUpdater(folder).GetAwaiter().GetResult();
                 if (args.Length > 1)
                     CheckVersionOne(args[1]);
                 RunWindowChecks(scope, history, folder);
-                Console.WriteLine("OK: scan history, navigation, largest files, live English/Spanish switching and persisted language.");
+                Console.WriteLine("OK: history, navigation, bilingual UI, explanations and update verification.");
                 return 0;
             }
             catch (Exception error)
@@ -36,6 +40,95 @@ namespace DiskGrowth
                 Console.Error.WriteLine(error);
                 return 1;
             }
+        }
+
+        private static async Task CheckUpdater(string fixture)
+        {
+            string app = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Disk Growth Tracker.exe");
+            byte[] bytes = File.ReadAllBytes(app);
+            Version appVersion = AssemblyName.GetAssemblyName(app).Version;
+            string versionLabel = appVersion.ToString(3);
+            string manifest = "version=" + versionLabel + "\nsha256=" + PortableUpdate.HashFile(app) + "\nsize=" + bytes.Length;
+            string target = Path.Combine(fixture, "Tracker.exe");
+            File.Copy(app, target);
+            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest, bytes)))
+            {
+                var release = await updater.Check(CancellationToken.None);
+                Require(release.Version == appVersion && UpdateRelease.Parse("version=2.0.10\nsha256=" + release.Hash +
+                    "\nsize=" + bytes.Length).Version > new Version(2, 0, 9, 0),
+                    "stable version compares correctly");
+                Require(release.Download.AbsolutePath.EndsWith("/Disk%20Growth%20Tracker%20" + versionLabel + ".exe"),
+                    "release path is derived from version");
+                string stage = await updater.Prepare(release, target, CancellationToken.None);
+                Require(PortableUpdate.IsStageName(Path.GetFileName(stage)) && File.Exists(Path.Combine(stage, "apply.exe")),
+                    "verified update prepared alongside current executable");
+                Require(PortableUpdate.HashFile(Path.Combine(stage, "payload.exe")) == release.Hash, "downloaded hash verified");
+                PortableUpdate.Cleanup(stage);
+                Require(!Directory.Exists(stage) && File.Exists(target), "cleanup deletes only application-owned stage");
+            }
+
+            bytes[bytes.Length - 1] ^= 1;
+            using (var updater = new PortableUpdate(new TestUpdateFeed(manifest, bytes)))
+            {
+                var release = await updater.Check(CancellationToken.None);
+                try
+                {
+                    await updater.Prepare(release, target, CancellationToken.None);
+                    throw new Exception("A corrupted download was accepted.");
+                }
+                catch (InvalidDataException) { }
+                Require(!Directory.EnumerateDirectories(fixture, ".disk-growth-update-*").Any(), "failed staging is removed");
+            }
+            try
+            {
+                UpdateRelease.Parse(manifest + "\nurl=https://example.com/file.exe");
+                throw new Exception("An update manifest with a URL override was accepted.");
+            }
+            catch (InvalidDataException) { }
+        }
+
+        private sealed class TestUpdateFeed : HttpMessageHandler
+        {
+            private readonly string manifest;
+            private readonly byte[] payload;
+
+            public TestUpdateFeed(string manifest, byte[] payload)
+            {
+                this.manifest = manifest;
+                this.payload = payload;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+            {
+                Require(request.RequestUri.Scheme == "https" && request.RequestUri.Host == "raw.githubusercontent.com",
+                    "updates use the trusted repository host");
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = request.RequestUri == UpdateRelease.Manifest
+                        ? (HttpContent)new StringContent(manifest)
+                        : new ByteArrayContent(payload)
+                });
+            }
+        }
+
+        private static void CheckPathExplanations()
+        {
+            const string clipchamp = @"C:\Users\Demo\AppData\Local\Packages\Clipchamp.Clipchamp_yxz26nhyzhsrt\LocalState\EBWebView\Default\IndexedDB";
+            var info = PathExplanation.Identify(clipchamp + @"\blob\sample.MP4", true);
+            Require(info.Location.EnglishTitle == "Clipchamp local storage" && info.Location.Source != null &&
+                info.Format.EnglishTitle == "Video file", "Clipchamp location and uppercase file extension");
+            Require(PathExplanation.Identify(clipchamp, false).Location.SpanishTitle == "Almacenamiento de Clipchamp",
+                "Clipchamp root and Spanish catalog");
+            Require(PathExplanation.Identify(@"D:\SteamLibrary\steamapps\common\Game", false).Location.EnglishTitle == "Steam game library",
+                "Steam game on another drive");
+            Require(PathExplanation.Identify(@"C:\Windows\Installer\package.msi", true).Location.EnglishTitle == "Windows Installer cache",
+                "Windows Installer context");
+            Require(PathExplanation.Identify(@"C:\pagefile.sys", true).Location.EnglishTitle == "Windows page file", "Windows root file");
+            Require(PathExplanation.Identify(@"C:\Examples\Windows\Installer", false).Location == null &&
+                PathExplanation.Identify(@"C:\Examples\pagefile.sys", true).Location == null, "no system match for incidental names");
+            Require(PathExplanation.Identify(@"C:\Demo\archive.zip", false).Format == null, "folder suffix is not a file type");
+            info = PathExplanation.Identify(@"D:\Unidentified\payload.unknown", true);
+            Require(info.Location == null && info.Format == null, "unknown file type is left unidentified");
         }
 
         private static void CheckLargestFiles(string folder, string scope)
@@ -194,6 +287,8 @@ namespace DiskGrowth
                         Require(Get<Label>(form, "detailPath").Text == Path.Combine(scope, "Vídeos"), "absolute path for selection");
                         Require(Get<Button>(form, "copy").Enabled && Get<Button>(form, "reveal").Enabled, "selected path actions");
                         Require(Get<Button>(form, "measureFolder").Enabled, "selected folder can be measured independently");
+                        CheckExplanationDialog(form, Get<Button>(form, "explainFolder"), false);
+                        SaveKnownExplanation(form, folder);
                         CheckFileWindow(form, scope, folder, false);
                         var languagePicker = Get<ComboBox>(form, "languagePicker");
                         var changeLanguage = typeof(DiskWindow).GetMethod("ChangeLanguage", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -201,7 +296,9 @@ namespace DiskGrowth
                         languagePicker.SelectedIndex = 1;
                         changeLanguage.Invoke(form, null);
                         Require(form.Text == "What's filling up my drive?" && scan.Text == "Scan now" &&
-                            listing.Columns[0].Text == "Folder" && Get<Button>(form, "copy").Text == "Copy path",
+                            listing.Columns[0].Text == "Folder" && Get<Button>(form, "copy").Text == "Copy path" &&
+                            Get<Button>(form, "explainFolder").Text == "What is this?" &&
+                            Get<Button>(form, "updateButton").Text == "Check for updates",
                             "English reached main controls and columns");
                         Require(picker.SelectedIndex == 1 && picker.GetItemText(picker.Items[0]) == "No comparison" &&
                             picker.GetItemText(picker.SelectedItem) != spanishDate, "comparison selection and localized date");
@@ -303,6 +400,8 @@ namespace DiskGrowth
                         Require(Get<Label>(dialog, "selectedPath").Text == expectedPath, "file action uses full path");
                         Require(Get<Button>(dialog, "copyFile").Enabled && Get<Button>(dialog, "revealFile").Enabled,
                             "file actions ready for selection");
+                        timer.Stop();
+                        CheckExplanationDialog(dialog, Get<Button>(dialog, "explainFile"), english);
                         SaveView(dialog, Path.Combine(output, english ? "largest-files-english.png" : "largest-files.png"));
                         checkedDialog = true;
                     }
@@ -322,6 +421,61 @@ namespace DiskGrowth
             if (failure != null)
                 throw failure;
             Require(checkedDialog, "file dialog opened");
+        }
+
+        private static void CheckExplanationDialog(Form owner, Button action, bool english)
+        {
+            Exception failure = null;
+            bool checkedDialog = false;
+            Require(action.Enabled, "explanation action is available");
+            using (var timer = new System.Windows.Forms.Timer { Interval = 50 })
+            {
+                timer.Tick += (sender, args) =>
+                {
+                    var dialog = Application.OpenForms.Cast<Form>().FirstOrDefault(form => form.GetType().Name == "ExplanationWindow");
+                    if (dialog == null)
+                        return;
+                    timer.Stop();
+                    try
+                    {
+                        Require(dialog.Owner == owner && dialog.Text == (english ? "What is this?" : "¿Qué es esto?"),
+                            "explanation dialog uses the parent and selected language");
+                        string description = ReadExplanation(dialog);
+                        Require(description.Contains(english ? "No known match" : "Sin coincidencia conocida"),
+                            "unidentified sample reports uncertainty honestly");
+                        checkedDialog = true;
+                    }
+                    catch (Exception error) { failure = error; }
+                    finally { dialog.Close(); }
+                };
+                timer.Start();
+                action.PerformClick();
+            }
+            if (failure != null)
+                throw failure;
+            Require(checkedDialog, "explanation opened from the UI");
+        }
+
+        private static void SaveKnownExplanation(Form owner, string output)
+        {
+            const string example = @"C:\Users\Demo\AppData\Local\Packages\Clipchamp.Clipchamp_yxz26nhyzhsrt\LocalState\EBWebView\Default\IndexedDB\clip.mp4";
+            var language = new UiLanguage();
+            language.Select("es");
+            var type = typeof(DiskWindow).GetNestedType("ExplanationWindow", BindingFlags.NonPublic);
+            using (var window = (Form)Activator.CreateInstance(type, example, true, language))
+            {
+                window.Show(owner);
+                string text = ReadExplanation(window);
+                Require(text.Contains("Contexto de la carpeta que lo contiene") && text.Contains("Almacenamiento de Clipchamp") &&
+                    text.Contains("Formato sugerido por la extensión .mp4"), "known context and file format have separate explanations");
+                SaveView(window, Path.Combine(output, "explanation.png"));
+                window.Close();
+            }
+        }
+
+        private static string ReadExplanation(Form window)
+        {
+            return string.Join("\n", Get<Panel>(window, "description").Controls.Cast<Control>().Select(label => label.Text));
         }
 
         private static T Get<T>(Form form, string field)

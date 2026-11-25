@@ -13,21 +13,41 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Crecimiento del disco")]
 [assembly: AssemblyProduct("Crecimiento del disco")]
-[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
 
 namespace DiskGrowth
 {
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
             AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling", false);
             AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", false);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrecimientoDisco");
-            Application.Run(new DiskWindow(new History(Path.Combine(local, "Historial")), new LanguagePreferences(local)));
+            var preferences = new LanguagePreferences(local);
+            if (args.Length > 0 && args[0] == "--apply-update")
+            {
+                var language = new UiLanguage();
+                language.Select(preferences.Load());
+                PortableUpdate.Apply(args, Application.ExecutablePath, language);
+                return;
+            }
+            using (var window = new DiskWindow(new History(Path.Combine(local, "Historial")), preferences))
+            {
+                if (args.Length == 2 && args[0] == "--updated" && PortableUpdate.IsStageName(args[1]))
+                {
+                    string stage = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), args[1]);
+                    window.Shown += async (sender, eventArgs) =>
+                    {
+                        await Task.Delay(1600);
+                        PortableUpdate.Cleanup(stage);
+                    };
+                }
+                Application.Run(window);
+            }
         }
     }
 
@@ -51,6 +71,8 @@ namespace DiskGrowth
         private readonly UiLanguage language = new UiLanguage();
         private readonly List<Action> translations = new List<Action>();
         private readonly ComboBox languagePicker = new ComboBox();
+        private readonly Button updateButton = new Button();
+        private CancellationTokenSource updateCancellation;
         private readonly ComboBox location = new ComboBox();
         private readonly ComboBox baselinePicker = new ComboBox();
         private readonly TextBox search = new TextBox();
@@ -66,6 +88,7 @@ namespace DiskGrowth
         private readonly Button copy = new Button();
         private readonly Button measureFolder = new Button();
         private readonly Button largestFiles = new Button();
+        private readonly Button explainFolder = new Button();
         private readonly Button clearFilters = new Button();
         private readonly Label breadcrumb = new Label();
         private readonly Label currentValue = new Label();
@@ -211,9 +234,10 @@ namespace DiskGrowth
             heading.Controls.Add(subtitle);
             var languagePanel = new TableLayoutPanel
             {
-                Dock = DockStyle.Right, Width = 158, ColumnCount = 1, RowCount = 2, Padding = new Padding(0, 6, 14, 5)
+                Dock = DockStyle.Right, Width = 333, ColumnCount = 2, RowCount = 2, Padding = new Padding(0, 6, 14, 5)
             };
             languagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            languagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 172F));
             languagePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
             languagePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             var languageLabel = new Label { Dock = DockStyle.Fill, Margin = Padding.Empty, ForeColor = Color.White };
@@ -226,6 +250,11 @@ namespace DiskGrowth
             languagePicker.SelectedIndex = language.Code == "es" ? 0 : 1;
             BindAccessible(languagePicker, "Idioma");
             languagePanel.Controls.Add(languagePicker, 0, 1);
+            StyleLocalButton(updateButton, "Buscar actualizaciones", false);
+            updateButton.Dock = DockStyle.Top;
+            updateButton.Height = 26;
+            updateButton.Margin = new Padding(10, 0, 0, 0);
+            languagePanel.Controls.Add(updateButton, 1, 1);
             heading.Controls.Add(languagePanel);
             layout.Controls.Add(heading, 0, 0);
 
@@ -400,7 +429,7 @@ namespace DiskGrowth
         {
             var panel = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 2, Margin = new Padding(0, 7, 0, 0),
+                Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 2, Margin = new Padding(0, 7, 0, 0),
                 Padding = new Padding(11, 2, 9, 2), BackColor = Tint
             };
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -408,6 +437,7 @@ namespace DiskGrowth
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 107F));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 122F));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 146F));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128F));
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 47F));
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 53F));
             detailTitle.Dock = detailPath.Dock = DockStyle.Fill;
@@ -424,12 +454,14 @@ namespace DiskGrowth
             StyleLocalButton(reveal, "Explorador", false);
             StyleLocalButton(measureFolder, "Medir carpeta", false);
             StyleLocalButton(largestFiles, "Archivos grandes", false);
-            copy.Margin = reveal.Margin = measureFolder.Margin = new Padding(0, 7, 8, 7);
-            largestFiles.Margin = new Padding(0, 7, 0, 7);
+            StyleLocalButton(explainFolder, "¿Qué es esto?", false);
+            copy.Margin = reveal.Margin = measureFolder.Margin = largestFiles.Margin = new Padding(0, 7, 8, 7);
+            explainFolder.Margin = new Padding(0, 7, 0, 7);
             BindTip(copy, "Copiar la ruta completa · Ctrl+Mayús+C");
             BindTip(reveal, "Abrir la carpeta en el Explorador de archivos.");
             BindTip(measureFolder, "Guardar una medición para esta carpeta como ubicación independiente.");
             BindTip(largestFiles, "Buscar los archivos más grandes de esta carpeta y sus subcarpetas.");
+            BindTip(explainFolder, "Explicar para qué sirve el elemento seleccionado.");
             panel.Controls.Add(copy, 1, 0);
             panel.SetRowSpan(copy, 2);
             panel.Controls.Add(reveal, 2, 0);
@@ -438,6 +470,8 @@ namespace DiskGrowth
             panel.SetRowSpan(measureFolder, 2);
             panel.Controls.Add(largestFiles, 4, 0);
             panel.SetRowSpan(largestFiles, 2);
+            panel.Controls.Add(explainFolder, 5, 0);
+            panel.SetRowSpan(explainFolder, 2);
             return panel;
         }
 
@@ -598,6 +632,7 @@ namespace DiskGrowth
         private void BindEvents()
         {
             languagePicker.SelectionChangeCommitted += (sender, args) => ChangeLanguage();
+            updateButton.Click += async (sender, args) => await CheckUpdates();
             location.SelectionChangeCommitted += async (sender, args) => await ChooseScope();
             location.KeyDown += async (sender, args) =>
             {
@@ -654,6 +689,12 @@ namespace DiskGrowth
             home.Click += (sender, args) => NavigateTo("");
             reveal.Click += (sender, args) => RevealFolder();
             copy.Click += (sender, args) => CopySelectedPath();
+            explainFolder.Click += (sender, args) =>
+            {
+                string folder = SelectedPath(SelectedRow());
+                if (folder != null)
+                    ShowExplanation(this, folder, false, language);
+            };
             largestFiles.Click += (sender, args) =>
             {
                 string folder = SelectedPath(SelectedRow());
@@ -695,6 +736,8 @@ namespace DiskGrowth
             listing.ClientSizeChanged += (sender, args) => ResizeColumns();
             FormClosing += (sender, args) =>
             {
+                if (updateCancellation != null)
+                    updateCancellation.Cancel();
                 if (activeScan == null)
                     return;
                 closeRequested = true;
@@ -948,7 +991,8 @@ namespace DiskGrowth
             baselinePicker.Enabled = !loading && !measuring && latest != null && baselinePicker.Items.Count > 1;
             search.Enabled = includeDescendants.Enabled = !loading && latest != null;
             growthOnly.Enabled = !loading && baseline != null;
-            scan.Enabled = !loading && (!measuring || !activeScan.IsCancellationRequested);
+            scan.Enabled = updateCancellation == null && !loading && (!measuring || !activeScan.IsCancellationRequested);
+            updateButton.Enabled = updateCancellation == null && !loading && !measuring;
             scan.Text = T(measuring ? (loading ? "Guardando…" : "Cancelar") : "Medir ahora");
             progressBar.Visible = measuring;
             UpdateFilterActions();
@@ -967,6 +1011,7 @@ namespace DiskGrowth
             var row = SelectedRow();
             string folder = SelectedPath(row);
             copy.Enabled = folder != null;
+            explainFolder.Enabled = folder != null;
             reveal.Enabled = folder != null && (row != null && !row.DirectFiles
                 ? row.ExistsNow
                 : relative.Length == 0 || latest != null && latest.Get(relative) != null);
